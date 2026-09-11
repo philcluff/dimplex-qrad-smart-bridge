@@ -1,0 +1,332 @@
+# Shared package for one Dimplex Q-Rad E radiator per Waveshare ESP32-S3-Zero.
+# Include from a per-radiator file that sets substitutions: name, friendly_name, radiator_mac.
+# Protocol: docs/ble-protocol.md. Scope: Manual family + target temperature.
+#
+# Derived from Joshua Yewman's Sunhouse storage heater config (MIT, notice in
+# LICENSE), which reversed the
+# same Glen Dimplex BLE service from the Dimplex Remo app:
+# https://github.com/JYewman/Sunhouse-Dimplex-Storage-Heater-ESPHome-Home-Assistant
+# The security parameters, clear-bonds button and characteristic UUIDs come from
+# there. The Q-Rad mode codes, write formats and the ESP-IDF encryption request are new.
+
+substitutions:
+  led_pin: GPIO21   # Waveshare ESP32-S3-Zero. ESP32-S3 Super Mini clones use GPIO48.
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: USB_SERIAL_JTAG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${name}-fallback
+    password: !secret ap_password
+
+captive_portal:
+
+web_server:
+  port: 80
+  version: 3
+
+globals:
+  - id: ble_connected
+    type: bool
+    initial_value: "false"
+  - id: mode_raw
+    type: int
+    initial_value: "0"
+  - id: setpoint_raw
+    type: int
+    initial_value: "0"
+
+esp32_ble:
+  io_capability: keyboard_only
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
+    interval: 320ms
+    window: 160ms
+  on_ble_advertise:
+    - then:
+        - lambda: |-
+            std::string n = x.get_name();
+            if (n.find("Dimplex") != std::string::npos && x.address_str() != std::string("${radiator_mac}"))
+              ESP_LOGI("qrad", "Unconfigured Dimplex advert: %s  mac=%s  rssi=%d", n.c_str(), x.address_str().c_str(), x.get_rssi());
+
+ble_client:
+  - mac_address: ${radiator_mac}
+    id: qrad
+    auto_connect: true
+    on_connect:
+      - lambda: |-
+          esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+          esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;
+          uint8_t key_size = 16;
+          uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+          uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+          esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
+          esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
+          esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
+          esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
+          esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
+          esp_bd_addr_t bda;
+          sscanf("${radiator_mac}", "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &bda[0], &bda[1], &bda[2], &bda[3], &bda[4], &bda[5]);
+          esp_err_t err = esp_ble_set_encryption(bda, ESP_BLE_SEC_ENCRYPT_MITM);
+          id(ble_connected) = true;
+          ESP_LOGI("qrad", "Connected to radiator, requesting encryption (err=%d). If unbonded, the radiator will now show a passkey.", err);
+    on_disconnect:
+      - lambda: |-
+          id(ble_connected) = false;
+          id(mode_raw) = 0;
+          id(setpoint_raw) = 0;
+          ESP_LOGW("qrad", "Disconnected from radiator");
+      - component.update: mode_text
+      - component.update: target_temperature
+    on_passkey_request:
+      - lambda: |-
+          ESP_LOGW("qrad", "PASSKEY REQUESTED: read the 6 digits on the radiator and enter them in the Pairing Passkey entity now");
+
+sensor:
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: qrad
+    id: setpoint_sensor
+    name: "Setpoint (radiator)"
+    service_uuid: "00000000-0000-1000-8000-00805f9b34fb"
+    characteristic_uuid: "00001023-0000-1000-8000-00805f9b34fb"
+    update_interval: 30s
+    notify: false
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 0
+    lambda: |-
+      if (x.size() < 1) return NAN;
+      id(setpoint_raw) = x[0];
+      id(target_temperature).publish_state(x[0]);
+      return (float) x[0];
+
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: qrad
+    id: mode_sensor
+    internal: true
+    service_uuid: "00000000-0000-1000-8000-00805f9b34fb"
+    characteristic_uuid: "00001001-0000-1000-8000-00805f9b34fb"
+    update_interval: 30s
+    notify: false
+    lambda: |-
+      if (x.size() < 1) return NAN;
+      id(mode_raw) = x[0];
+      id(mode_text).update();
+      return (float) x[0];
+
+  - platform: ble_client
+    type: rssi
+    ble_client_id: qrad
+    name: "Radiator RSSI"
+    entity_category: diagnostic
+    update_interval: 10s
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: template
+    name: "Mode"
+    id: mode_text
+    lambda: |-
+      if (!id(ble_connected)) return {};
+      switch (id(mode_raw)) {
+        case 1: return {"Timer"};
+        case 2: return {"Manual"};
+        case 3: return {"Eco"};
+        case 4: return {"Frost Protect"};
+        default: return {"Unknown"};
+      }
+    update_interval: 30s
+
+  - platform: ble_client
+    ble_client_id: qrad
+    name: "Model"
+    service_uuid: "00000000-0003-1000-8000-00805f9b34fb"
+    characteristic_uuid: "00002005-0000-1000-8000-00805f9b34fb"
+    update_interval: 1h
+    notify: false
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: template
+    name: "Radiator Connected"
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: return id(ble_connected);
+
+number:
+  # Target temperature. Writing this is the whole point of the device.
+  # Setpoint <= 19 reads back as Eco, >= 20 as Manual; both are the manual family.
+  - platform: template
+    name: "Target Temperature"
+    id: target_temperature
+    icon: mdi:thermometer
+    unit_of_measurement: "°C"
+    device_class: temperature
+    min_value: 7
+    max_value: 30
+    step: 1
+    optimistic: false
+    update_interval: 30s
+    lambda: |-
+      if (!id(ble_connected) || id(setpoint_raw) == 0) return NAN;
+      return (float) id(setpoint_raw);
+    set_action:
+      - if:
+          condition:
+            lambda: return !id(ble_connected);
+          then:
+            - logger.log:
+                level: WARN
+                format: "Not connected, setpoint write dropped"
+          else:
+            - if:
+                condition:
+                  lambda: return id(mode_raw) != 2 && id(mode_raw) != 3;
+                then:
+                  - logger.log: "Radiator not in manual family, forcing Manual first"
+                  - ble_client.ble_write:
+                      id: qrad
+                      service_uuid: "00000000-0000-1000-8000-00805f9b34fb"
+                      characteristic_uuid: "00001001-0000-1000-8000-00805f9b34fb"
+                      value: [2, 0, 0, 0, 0, 0]
+                  - delay: 300ms
+            - ble_client.ble_write:
+                id: qrad
+                service_uuid: "00000000-0000-1000-8000-00805f9b34fb"
+                characteristic_uuid: "00001023-0000-1000-8000-00805f9b34fb"
+                value: !lambda |-
+                  int t = (int) x;
+                  if (t < 7) t = 7;
+                  if (t > 30) t = 30;
+                  ESP_LOGI("qrad", "Writing setpoint %d", t);
+                  return {(uint8_t) t, 0};
+            - delay: 1s
+            - component.update: setpoint_sensor
+            - component.update: mode_sensor
+            - delay: 500ms
+            - component.update: mode_text
+
+
+text:
+  # Entered once, when the radiator displays its pairing code.
+  - platform: template
+    name: "Pairing Passkey"
+    id: pairing_passkey
+    icon: mdi:key
+    entity_category: config
+    mode: text
+    min_length: 0
+    max_length: 6
+    optimistic: true
+    restore_value: false
+    set_action:
+      - if:
+          condition:
+            lambda: return x.size() != 6 || x.find_first_not_of("0123456789") != std::string::npos;
+          then:
+            - logger.log:
+                level: WARN
+                format: "Passkey must be exactly 6 digits"
+          else:
+            - lambda: ESP_LOGI("qrad", "Replying with passkey %s", x.c_str());
+            - ble_client.passkey_reply:
+                id: qrad
+                passkey: !lambda return (uint32_t) atoi(x.c_str());
+            - text.set:
+                id: pairing_passkey
+                value: ""
+
+button:
+  - platform: template
+    name: "Force Manual"
+    icon: mdi:hand-back-right
+    on_press:
+      - ble_client.ble_write:
+          id: qrad
+          service_uuid: "00000000-0000-1000-8000-00805f9b34fb"
+          characteristic_uuid: "00001001-0000-1000-8000-00805f9b34fb"
+          value: [2, 0, 0, 0, 0, 0]
+      - delay: 1s
+      - component.update: setpoint_sensor
+      - component.update: mode_sensor
+      - delay: 500ms
+      - component.update: mode_text
+
+  - platform: template
+    name: "Clear BLE Bonds"
+    icon: mdi:bluetooth-off
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          int count = esp_ble_get_bond_device_num();
+          if (count > 0) {
+            esp_ble_bond_dev_t *devs = (esp_ble_bond_dev_t *) malloc(sizeof(esp_ble_bond_dev_t) * count);
+            esp_ble_get_bond_device_list(&count, devs);
+            for (int i = 0; i < count; i++) esp_ble_remove_bond_device(devs[i].bd_addr);
+            free(devs);
+          }
+          ESP_LOGW("qrad", "Cleared %d bonds; restart and re-pair", count);
+
+  - platform: restart
+    name: "Restart"
+    entity_category: diagnostic
+
+# Onboard WS2812: green connected, amber searching.
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    pin: ${led_pin}
+    num_leds: 1
+    chipset: WS2812
+    channel_colors: RGB
+    internal: true
+
+interval:
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            lambda: return id(ble_connected) && id(mode_raw) == 0;
+          then:
+            - component.update: mode_sensor
+      - lambda: |-
+          auto call = id(status_led).turn_on();
+          call.set_brightness(0.50);
+          if (id(ble_connected)) call.set_rgb(0.0, 1.0, 0.0);
+          else call.set_rgb(1.0, 0.5, 0.0);
+          call.perform();

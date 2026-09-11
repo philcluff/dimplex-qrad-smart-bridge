@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  esphome:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: esphome
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install ESPHome
+        run: pip install -r ../requirements.txt
+
+      - name: Cache toolchains
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            esphome/.esphome
+          key: esphome-${{ runner.os }}-${{ hashFiles('esphome/qrad-common.yaml') }}
+          restore-keys: esphome-${{ runner.os }}-
+
+      - name: Placeholder secrets
+        run: |
+          printf 'wifi_ssid: "ci-placeholder"\nwifi_password: "ci-placeholder"\napi_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="\nota_password: "ci-placeholder"\nap_password: "ci-placeholder"\n' > secrets.yaml
+
+      - name: Validate
+        run: |
+          esphome config qrad-office.yaml
+          esphome config qrad-living-room.yaml
+
+      - name: Compile
+        run: esphome compile qrad-office.yaml

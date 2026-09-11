@@ -1,0 +1,10 @@
+# Office QRAD100E, Series D.
+# radiator_mac: placeholder until the node logs "Dimplex advert: ... mac=XX:XX:XX:XX:XX:XX".
+substitutions:
+  name: qrad-office
+  friendly_name: "Office Radiator"
+  radiator_mac: "00:A0:50:B5:95:A2"
+  # led_pin: GPIO48   # uncomment for an ESP32-S3 Super Mini instead of the Waveshare S3-Zero
+
+packages:
+  common: !include qrad-common.yaml

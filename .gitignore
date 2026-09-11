@@ -1,0 +1,13 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# ESPHome
+esphome/secrets.yaml
+esphome/.esphome/
+
+# Editor and OS
+*~
+.DS_Store

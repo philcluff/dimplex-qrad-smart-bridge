@@ -1,0 +1,41 @@
+[tools]
+python = "3.13"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.deps]
+description = "Install Python dependencies into the venv"
+run = "uv pip install -q -r requirements.txt"
+
+[tasks.scan]
+description = "Report whether a radiator is advertising (arg: seconds)"
+run = "python tools/ble_scan.py"
+
+[tasks.dump]
+description = "Dump the full GATT table to JSON (arg: output path)"
+run = "python tools/ble_dump.py"
+
+[tasks.watch]
+description = "Poll readable characteristics and print changes; type notes to mark the log"
+run = "python tools/ble_watch.py"
+
+[tasks.set-temp]
+description = "Write-test: bump setpoint by N degrees then restore (arg: N)"
+run = "python tools/ble_set_temp.py"
+
+[tasks.set-mode]
+description = "Write-test: set a mode or boost then restore (args: mode <n> [sub] | boost <min>)"
+run = "python tools/ble_set_mode.py"
+
+[tasks.esphome-config]
+description = "Validate an ESPHome config (arg: esphome/<device>.yaml)"
+run = "esphome config"
+
+[tasks.esphome-run]
+description = "Compile and flash/OTA an ESPHome config (arg: esphome/<device>.yaml)"
+run = "esphome run"
+
+[tasks.esphome-logs]
+description = "Tail logs from a device (arg: esphome/<device>.yaml)"
+run = "esphome logs"
