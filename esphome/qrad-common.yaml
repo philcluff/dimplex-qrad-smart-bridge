@@ -129,6 +129,8 @@ sensor:
     characteristic_uuid: "00001023-0000-1000-8000-00805f9b34fb"
     update_interval: 30s
     notify: false
+    filters:
+      - delta: 0.5
     unit_of_measurement: "°C"
     device_class: temperature
     accuracy_decimals: 0
@@ -164,6 +166,8 @@ sensor:
     characteristic_uuid: "00000008-0000-1000-8000-00805f9b34fb"
     update_interval: never
     notify: false
+    filters:
+      - delta: 0.05
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -200,6 +204,8 @@ sensor:
     characteristic_uuid: "0000000a-0000-1000-8000-00805f9b34fb"
     update_interval: 1h
     notify: false
+    filters:
+      - delta: 0.5
     unit_of_measurement: "W"
     device_class: power
     accuracy_decimals: 0
@@ -216,6 +222,8 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     update_interval: never
+    filters:
+      - delta: 0.5
     lambda: |-
       if (!id(ble_connected) || id(element1_watts) == 0) return NAN;
       return id(element1_on) ? (float) id(element1_watts) : 0.0f;
@@ -226,6 +234,8 @@ sensor:
     name: "Radiator RSSI"
     entity_category: diagnostic
     update_interval: 10s
+    filters:
+      - delta: 1
 
   - platform: wifi_signal
     name: "WiFi Signal"
