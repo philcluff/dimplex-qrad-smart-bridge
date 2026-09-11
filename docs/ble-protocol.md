@@ -60,7 +60,7 @@ XXXX is listed below. Values are hex as read.
 | 1007 | R/W | 01 00 00 00 00 00 00 00 00 | unknown | |
 | 1008 | R/W | 00 | unknown | |
 | 100d | R/W | 00 | **confirmed (read)** | Advance flag in timer modes: 1 when Advance engaged, 0 when released. Setpoint in 1023 flips with the period. Not available in Away. Sunhouse also uses it for boost hours; untested here. |
-| 1011 | R | 00 | unknown | Read-only. Candidate for heating output / demand state. |
+| 1011 | R | 00 | confirmed (ConfigR) | ErrorStatus: fault code id, 0 = none. |
 | 1012-1015 | R/W | 10 x 00 each | unknown | Four 10-byte blocks. Candidates: preset timer definitions or lock config. |
 | 1016 | R/W | 00 07 | unknown | Contains 7. Setback or frost temperature? |
 | 1017 | R/W | 01 7c | unknown | |
@@ -73,9 +73,9 @@ XXXX is listed below. Values are hex as read.
 | Char | Props | Value | Status | Meaning |
 |---|---|---|---|---|
 | 0001 | R/W | 02 b9 ff 96 | confirmed | Display backlight colour [02, R, G, B]. Manual says colour tracks selected temperature, deep blue to bright red. Seen b9ff96, ff7878, 00ff00, 87ceeb, 00008c (frost). |
-| 0002 | R/W | 00 00 00 | unknown | |
-| 0007 | R | 03 | confirmed | Current UI screen index. 0 after boot (home screen), 1-6 seen while navigating menus. |
-| 0008 | R/W | 00 00 00 | unknown | |
+| 0002 | R/W | 00 00 00 | **confirmed** | ConfigR: Trac. Selector: write `[n,0,0]`, read `[n, active]` for element n. Live heating state. |
+| 0007 | R | 03 | confirmed | ConfigR: LastKeyPressValue. Last button pressed; changes as you navigate, which is why it looked like a screen index. |
+| 0008 | R/W | 00 00 00 | **confirmed** | ConfigR: TemperatureSensor. Selector: write `[n,0,0]`, read `[n, whole, tenths]`. n=1 room temperature. Read 24.5 °C. |
 | 100e | R/W | 00 | unknown | |
 | 1010 | R/W | 47 "G" | unknown | |
 | 1020 | R/W | 00 | unknown | |
@@ -85,7 +85,7 @@ XXXX is listed below. Values are hex as read.
 | Char | Props | Value | Status | Meaning |
 |---|---|---|---|---|
 | 0005 | R/W | 01 00 00 | unknown | |
-| 100a | R/W | 01 | unknown | Boolean. Candidates: sound, adaptive start, open window detection. |
+| 100a | R/W | 01 | unknown | Boolean. Debug screen shows flags `BT` and `OW` (Bluetooth, Open Window Detection) both set; this is likely one of them. |
 | 100b | R/W | 05 | unknown | |
 | 100c | R/W | 00 | unknown | |
 | 100f | R/W | 00 | unknown | |
@@ -95,18 +95,18 @@ XXXX is listed below. Values are hex as read.
 
 | Char | Props | Value | Status | Meaning |
 |---|---|---|---|---|
-| 000a | R/W | e8 03 98 08 00 00 00 00 | unknown | LE16: 1000, 2200. Rated watts plus unknown. NOT room temperature (unchanged while display debug read 23.4). |
+| 000a | R/W | e8 03 98 08 00 00 00 00 | confirmed | Debug-page parameters G and H: LE16 1000 and 2200, shown as `G 1000` / `H 2200` on the radiator's debug screen. G is almost certainly rated watts. NOT room temperature. |
 | 1022 | R/W | 00 | unknown | |
 | 1050 | R | f3 10 00 | unknown | |
-| 2001 | R/W | 00 00 00 | unknown | |
-| 2002 | R | 3d 00 3b 1c 07 02 | unknown | Version numbers? |
+| 2001 | R/W | 00 00 00 | confirmed (ConfigR) | SwVersion. Selector: write `[n,0,0]`, read `[n, major, minor]`; n = 0 controller, 1 UI, 2 RF. |
+| 2002 | R | (6 bytes, per unit) | confirmed | ConfigR: Gdid. The unit's Glen Dimplex ID, shown big-endian on the debug screen under the name prefix. Redacted here. |
 | 2003 | R/W | 00 04 00 | unknown | |
 | 2004 | R | "<Dimplex>" | confirmed | Advertised name suffix |
 | 2005 | R | "QRAD100E;D;" | confirmed | Model;Series; |
 | 000b | R/W | fb x9 f9 x4 | unknown | int8 table, -5/-7. Calibration curve? |
 | 000c | R/W | f9 x3 f6 x5 f1 x5 | unknown | int8 table, -7/-10/-15. Calibration curve? |
 | 2006-2008 | none listed | | unknown | Probably write-only actions. Do not write blind. |
-| 2009 | R | 05 | unknown | |
+| 2009 | R | 05 | confirmed | RF firmware revision; debug screen shows `RF Rev 005`. |
 | 200a | R | "EP4099" | confirmed | Product code |
 | 200b | R | e5 26 | unknown | |
 | 200c | R | 14 13 03 0f 0f 23 | unknown | Build date/time? |
@@ -139,11 +139,183 @@ Confirmed on Q-Rad:
 ## Next
 
 1. ~~Run `tools/ble_watch.py` while changing setpoint, mode, boost, advance.~~ Done, sessions 1 and 2.
-2. Identify the room temperature characteristic (Sunhouse never found it).
+2. ~~Identify the room temperature characteristic.~~ Done: 0008 with a selector write, from the ConfigR decompile.
    Ruled out so far (2026-09-11): not in any readable characteristic (display debug menu showed 23.4 while 000a still read 2200 and nothing held 234/2340); no CCCD descriptors exist outside the Cypress bootloader so no notify path; opening the debug menu changes nothing over BLE (not even 0007). Remaining theory: write-then-read request like 1002. Needs the ConfigR APK decompiled rather than blind writes.
 3. ~~First write: target temperature to 1023, verified on the display.~~ Done.
 4. Dump the other three radiators and diff against this one.
 5. ~~Build the ESPHome node.~~ Done, see `esphome/`. Everything in the control recipe is implemented as written.
+
+## Radiator debug screens, 2026-09-11
+
+Two pages, reached from the radiator's own menus (photos not committed). Page 1:
+
+```
+AL9502
+<12 hex digits, the unit's GDID>
+BT
+OW
+UI Rev 018
+RF Rev 005
+```
+
+Page 2:
+
+```
+A 23.7          ambient temperature (not exposed over BLE)
+B 15.0 14.5     setpoint and, probably, the heating-off threshold
+C 0
+D 0 0
+E 300
+F 0 0
+G 1000          = 000a bytes 0-1
+H 2200          = 000a bytes 2-3
+```
+
+Page 2 again with the setpoint forced to 30 so the element ran (14:33):
+
+```
+A 24.4          ambient
+B 30.0 28.3     setpoint and an adjusted target
+C 100           heat demand, percent
+D 0 1           two element flags; Q-Rad is dual-element, one was on
+E 300           constant, probably the control cycle in seconds
+F 150 300       on-time within the cycle, 150 of 300 s
+G 1000  H 2200  unchanged
+```
+
+While C read 100, every readable characteristic was re-read from the ESPHome
+node: 000a tail words, 1003, 1005, 1008, 1011, 1016, 1017 all unchanged from
+idle. Heating state, demand and ambient are not exposed over BLE in any
+readable characteristic. Power would be G x duty, if the duty were available.
+
+The 12-digit ID is 2002 byte-reversed, `RF Rev 005` is 2009. `UI Rev 018`
+(0x12) has no obvious match in the dump; 1050 (`f3 10 00`) and 200c are the
+candidates. Opening these screens changes nothing readable over BLE.
+
+## Parameter names from Dimplex's ConfigR app
+
+Dimplex's ConfigR installer app (`com.Dimplex.DimplexToolkit`, v3.8.0, a .NET
+MAUI app) carries a class per characteristic in
+its parameter model, one class per characteristic. Decompiled 2026-09-11 for
+interoperability; only the resulting facts are recorded here. This is the
+authoritative naming. 61
+parameters are defined; 33 exist on the Q-Rad E Series D.
+
+Newer GDHV products expose the same parameters under a vendor base UUID,
+`0000XXXX-000S-474C-4E44-494D504C4558` (the tail is ASCII `GLNDIMPLEX`), with
+the service number in the fourth group. The Q-Rad uses the Bluetooth SIG base.
+
+| Char | Service | Len | R/W | ConfigR name | On Q-Rad D |
+|---|---|---|---|---|---|
+| 0002 | …-0001-… | 3 | R | Trac | yes |
+| 0003 | …-0001-… | 2 | R | Relay | no |
+| 0005 | …-0002-… | 3 | RW | Sound | yes |
+| 0006 | …-0000-… | 7 | W | SetRtc | yes |
+| 0007 | …-0001-… | 1 | R | LastKeyPressValue | yes |
+| 0008 | …-0001-… | 3 | R | TemperatureSensor | yes |
+| 000a | …-0003-… | 8 | RW | PowerLoading | yes |
+| 000e | …-0001-… | 1 | R | OffpeakStatus | no |
+| 0106 | …-0000-… | 8 | W | SetRtcWithSeconds | no |
+| 1001 | …-0000-… | 6 | RW | HeatingMode | yes |
+| 1002 | …-0000-… | 31 | RW | ScheduleAndSetTemperature | yes |
+| 1005 | …-0000-… | 1 | RW | TemperatureUnit | yes |
+| 1006 | …-0000-… | 4 | RW | SetpointRange | yes |
+| 1007 | …-0000-… | 9 | RW | OpenWindowDetection | yes |
+| 1008 | …-0000-… | 1 | RW | PreEmptiveHeating | yes |
+| 100c | …-0002-… | 1 | RW | RfComms | yes |
+| 100d | …-0000-… | 1 | RW | AdvanceHeating | yes |
+| 100e | …-0001-… | 1 | RW | OtaEnable | yes |
+| 1010 | …-0003-… | 1 | RW | EolTest | yes |
+| 1011 | …-0000-… | 1 | R | ErrorStatus | yes |
+| 1016 | …-0000-… | 2 | RW | Setback | yes |
+| 1017 | …-0000-… | 2 | RW | Runback | yes |
+| 1019 | …-0002-… | 1 | RW | SpConfig | yes |
+| 101b | …-0003-… | 1 | R | HeaterSize | no |
+| 101c | …-0002-… | 16 | RW | ChargeTimes | no |
+| 101d | …-0002-… | 1 | RW | SlaveDevice | no |
+| 101e | …-0002-… | 1 | RW | AdditionalCharge | no |
+| 1020 | …-0001-… | 1 | RW | TestMode | yes |
+| 1023 | …-0000-… | 2 | RW | CurrentSetTemperature | yes |
+| 1024 | …-0003-… | 4 | RW | HeatDemand | no |
+| 1027 | …-0000-… | 2 | RW | RunbackTime | yes |
+| 1028 | …-0000-… | 2 | RW | RunbackSetpoint | yes |
+| 102a | …-0000-… | 8 | RW | AwayMode | yes |
+| 1030 | …-0002-… | 1 | W | FactoryReset | no |
+| 1033 | …-0002-… | 33 | RW | Security | no |
+| 1034 | …-0002-… | 74 | RW | SlaveInfo | no |
+| 1037 | …-0003-… | 3 | RW | FunctionRule | no |
+| 2001 | …-0003-… | 3 | R | SwVersion | yes |
+| 2002 | …-0003-… | 6 | RW | Gdid | yes |
+| 2004 | …-0003-… | 20 | RW | Brand | yes |
+| 2005 | …-0003-… | 6 | RW | HeaterType | yes |
+| 2006 | …-0003-… | 5 | RW | Btpk | yes |
+| 2007 | …-0003-… | 16 | RW | EncKey | yes |
+| 2008 | …-0003-… | 16 | RW | AuthKey | yes |
+| 200a | …-0003-… | 6 | RW | EpIdentifier | yes |
+| 2012 | …-0003-… | 5 | RW | FirmwareVersion | no |
+| 300e | …-0001-… | 1 | RW | Esp32OtaEnable | no |
+| 4012 | …-0000-… | 1 | R | HeatSetting | no |
+| 7005 | …-0004-… | 1 | R | DsmMode | no |
+| 7006 | …-0004-… | 1 | R | SeasonalBand | no |
+| 7007 | …-0004-… | 2 | R | OffpeakCounter | no |
+| 7008 | …-0004-… | 3 | R | Runtime | no |
+| 700b | …-0005-… | 3 | RW | ChargeMode | no |
+| 700e | …-0005-… | 4 | RW | ExternalController | no |
+| 701f | …-0001-… | 9 | R | RelayStatus | no |
+| 7020 | …-0000-… | 3 | RW | ButtonPressOperation | no |
+| 7021 | …-0003-… | 4 | RW | HeatingModeSetpoint | no |
+| 7022 | …-0003-… | 4 | RW | PresetButtonSetpoint | no |
+| 7024 | …-0003-… | 12 | R | PcbStatus | no |
+| 7026 | …-0000-… | 8 | RW | ActivateProduct | no |
+| 7029 | …-0003-… | 1 | RW | ErrorTone | no |
+
+Present on the Q-Rad but not named by ConfigR: 0001 (backlight colour, from
+observation), 000b, 000c, 1003, 100a, 100b, 100f, 1012-1015, 1022, 1029, 1050,
+2003, 2009, 200b, 200c, 200d, 200f.
+
+### Selector characteristics: write, then read
+
+Several parameters multiplex more than one value through one characteristic.
+ConfigR's read routine writes a selector, then reads:
+
+| Char | Name | Write | Read back |
+|---|---|---|---|
+| 0008 | TemperatureSensor | `[n, 0, 0]`, n = 1 room, 2 LCD, 3 core | `[n, whole, tenths]`, °C = whole + tenths/10 |
+| 0002 | Trac | `[n, 0, 0]`, n = element 1 or 2 | `[n, active]` |
+| 2001 | SwVersion | `[n, 0, 0]`, n = 0 controller, 1 UI, 2 RF | `[n, major, minor]` |
+| 7008 | Runtime (not on Q-Rad) | `[n, 0, 0]`, n = 0..4 | runtime counters |
+| 0003 | Relay (not on Q-Rad) | `[n, 0]` | relay state |
+
+This is why the plain reads returned zeros all morning: nothing had been
+selected. **Confirmed on the Q-Rad 2026-09-11 15:0x**: write `[1,0,0]` to 0008
+then read gave `01 18 05` = 24.5 °C against 24.4 on the debug screen; 0002
+gave `01 00` with the element idle. The ESPHome node now does both every 30 s.
+
+### Decoders worth having
+
+- **000a PowerLoading**: `[e1 lo, e1 hi, e2 lo, e2 hi, 0, 0, 0, 0]`, rated watts
+  per element. Q-Rad 100E reads 1000 and 2200. Live power = rated x element active.
+- **1011 ErrorStatus**: one byte, fault code id, 0 = no error.
+- **0007 LastKeyPressValue**: last button pressed, not a screen index.
+- **1016 Setback**: 2 bytes. **1017 Runback**, **1027 RunbackTime** (boost
+  countdown), **1028 RunbackSetpoint** (boost default): ConfigR's names for the
+  boost family.
+- **1007 OpenWindowDetection** (9 bytes), **1008 PreEmptiveHeating** (adaptive
+  start), **1005 TemperatureUnit**, **100c RfComms**, **0005 Sound**,
+  **1019 SpConfig**, **100e OtaEnable**, **1020 TestMode**, **1010 EolTest**.
+- **2002 Gdid**, **2004 Brand**, **2005 HeaterType**, **200a EpIdentifier**,
+  **2006 Btpk**, **2007 EncKey**, **2008 AuthKey** (the last three are the
+  property-less ones; leave alone).
+- **1024 HeatDemand** `[band, temperature]` exists in ConfigR but not on this
+  radiator's firmware.
+- **0006 SetRtc** is write-only in ConfigR (7 bytes); **0106 SetRtcWithSeconds**
+  (8 bytes) is the newer form. ConfigR writes the RTC as its connection test.
+- **700f Disconnect**: ConfigR writes `[1]` here to make the radiator drop the
+  link cleanly. Not present on the Q-Rad D.
+
+ConfigR pairs with a plain BLE bond and only performs its extra
+`SecurityParameter` (1033) handshake on products that expose it. The Q-Rad D
+does not, so there is no app-level authorisation.
 
 ## Watch session 1, 2026-09-11 09:38
 

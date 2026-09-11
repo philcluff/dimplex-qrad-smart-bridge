@@ -11,3 +11,5 @@ esphome/.esphome/
 # Editor and OS
 *~
 .DS_Store
+*.apk
+*.xapk

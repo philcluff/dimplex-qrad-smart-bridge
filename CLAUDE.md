@@ -45,13 +45,14 @@ There are no tests.
 - **Encryption is requested explicitly on connect.** On ESP-IDF, `esp_ble_set_encryption()` after service discovery is what triggers pairing; without it every read fails with GATT status 15 and no passkey prompt appears. Keep it in `on_connect`.
 - **Passkey entry is a text entity that clears itself.** Six digits, validated, replied via `ble_client.passkey_reply`, then blanked. Don't store it.
 - **Refreshes come from the main loop.** The mode read publishes the Mode text directly, and the 2 s interval requests a mode read whenever connected with no mode known. Don't chain delayed actions off BLE triggers.
+- **Selector reads stay sequenced.** Room temperature (`0x0008`), element state (`0x0002`) and firmware version (`0x2001`) return whatever was last selected by a `[n,0,0]` write. Their sensors are `update_interval: never` and are only updated from the 30 s interval right after the matching write. Don't give them their own poll.
 - **Never write to** the two Cypress bootloader services (`00060000-f8ce-...`) or the property-less characteristics `2006`-`2008` and `200f`. `docs/ble-protocol.md` lists what is safe.
 - **LED semantics are fixed:** green connected, amber not. Channel order on the S3-Zero is RGB, brightness 0.5, pin from the `led_pin` substitution. Documented in both READMEs; change both or neither.
 - **One node, one radiator.** BLE through walls is poor and the radiator accepts one central. Don't try to multiplex.
 
 ## Attribution
 
-The BLE service, characteristic numbering and the ESPHome config skeleton come from JYewman's Sunhouse project (linked in the README credits and at the top of `qrad-common.yaml`). Keep that attribution when refactoring, and credit any further upstream source the same way when it contributes something.
+The BLE service, characteristic numbering and the ESPHome config skeleton come from JYewman's Sunhouse project (linked in the README credits and at the top of `qrad-common.yaml`). Parameter names and the selector protocol come from decompiling Dimplex's ConfigR app (.NET MAUI; assemblies unpacked from `libassembly-store.so`, ILSpy for C#). The APK and decompiled sources are not committed and `*.apk`/`*.xapk` are gitignored; quote findings into `docs/ble-protocol.md` instead. Keep both attributions when refactoring.
 
 ## Conventions
 

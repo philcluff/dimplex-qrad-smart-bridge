@@ -16,6 +16,9 @@ adoption, e.g. `number.office_radiator_target_temperature`.
   Non-optimistic: shows what the radiator reports. If the radiator is in Timer
   or Frost Protect it is forced to Manual first. Unavailable when disconnected.
 - **Setpoint (radiator)** (sensor) - raw read of characteristic 0x1023, every 30 s.
+- **Room Temperature** (sensor) - the radiator's own room sensor, 0.1 °C, every 30 s via a selector write to 0x0008.
+- **Heating** (binary sensor) - element 1 on or off, every 30 s via a selector write to 0x0002.
+- **Power** (sensor) - rated watts while heating, else 0. **Rated Power** (diagnostic) - from 0x000a, hourly.
 - **Mode** (text sensor) - Timer / Manual / Eco / Frost Protect. Blank when disconnected.
 - **Radiator Connected** (binary sensor, diagnostic).
 - **Radiator RSSI** (sensor, diagnostic) - live link RSSI every 10 s. Use it to
@@ -76,6 +79,10 @@ POST needs a body, even an empty one, or the server returns 411.
   refreshes are driven from the 2 s interval and from the mode sensor's own
   lambda instead.
 - `0x2005` (model string) lives under service `...-0003-...`, not the main one.
+- Room temperature, element state and firmware versions are selector
+  characteristics: write `[n,0,0]` then read, or you get zeros. The 30 s
+  interval in the package does the writes; the sensors have `update_interval:
+  never` and are updated from that interval so the read always follows its write.
 - The WS2812 on the S3-Zero is RGB order, not GRB as some guides say. Green
   showing as red is the tell.
 - A non-optimistic template number with no value shows "NaN" on the ESPHome

@@ -28,7 +28,7 @@ The radiator's modes are simpler than the menus suggest. Manual and Eco are one 
 
 Timers, boost, advance, away, clock and even the backlight colour are all exposed over BLE and decoded in [docs/ble-protocol.md](docs/ble-protocol.md), but not built. I only use Manual. The characteristic numbers and the pairing approach came from the Sunhouse project; the Q-Rad's mode codes, the Manual/Eco relationship, boost, away and the write formats were decoded here, and differ from the Sunhouse in places.
 
-The one thing the radiator won't give up is its room temperature. It isn't in any readable characteristic, there's no notify path, and opening the radiator's own debug screen changes nothing on the air. It most likely needs a request-then-read sequence known to Dimplex's ConfigR installer app. I have a sensor in every room already, so it sits on the [backlog](docs/backlog.md).
+Room temperature and heating state took longer. They aren't in any readable characteristic on their own: the radiator multiplexes several values through one characteristic and you have to write a selector byte first, then read. That pattern, and the official name of every characteristic, came from decompiling Dimplex's ConfigR installer app, which is .NET MAUI with a class per parameter. So the node also reports the room's temperature to a tenth of a degree, whether the element is on, and the resulting power draw.
 
 ## Firmware
 
@@ -47,7 +47,8 @@ What the node does:
 
 - Connects to the radiator, asks for an encrypted link, bonds on first pairing and reconnects on its own thereafter.
 - Exposes **Target Temperature**, 7 to 30 °C in whole degrees. It's non-optimistic: the value is what the radiator reports, polled every 30 s and re-read a second after every write, and it goes unavailable when the radiator is off.
-- Exposes **Mode**, **Setpoint (radiator)**, **Radiator Connected**, **Radiator RSSI** and **Model**, plus **Force Manual**, **Clear BLE Bonds** and **Restart** buttons.
+- Exposes **Room Temperature** and **Heating** (element on or off) every 30 s, and **Power** derived from the element state and the radiator's rated watts.
+- Exposes **Mode**, **Setpoint (radiator)**, **Radiator Connected**, **Radiator RSSI**, **Rated Power** and **Model**, plus **Force Manual**, **Clear BLE Bonds** and **Restart** buttons.
 - Serves a web page at `http://<name>.local/` so a radiator can be paired and driven without Home Assistant.
 - Uses the onboard LED as the only status indicator:
 
@@ -85,11 +86,14 @@ Glen Dimplex's BLE service is `00000000-0000-1000-8000-00805f9b34fb`, with chara
 
 | Characteristic | Read | Write |
 |---|---|---|
-| `1023` | Setpoint, LE16 whole degrees | `[temp, 0x00]` |
-| `1001` | Mode: byte 0 is 1 Timer, 2 Manual, 3 Eco, 4 Frost; byte 1 the timer sub-mode; byte 3 set while boosting | `[mode, submode, 0, 0, 0, 0]` |
-| `2005` (service `…-0003-…`) | Model string, e.g. `QRAD100E;D;` | |
+| `1023` CurrentSetTemperature | Setpoint, LE16 whole degrees | `[temp, 0x00]` |
+| `1001` HeatingMode | Byte 0 is 1 Timer, 2 Manual, 3 Eco, 4 Frost; byte 1 the timer sub-mode; byte 3 set while boosting | `[mode, submode, 0, 0, 0, 0]` |
+| `0008` TemperatureSensor (service `…-0001-…`) | `[n, whole, tenths]` for the sensor last selected | `[1, 0, 0]` selects the room sensor |
+| `0002` Trac (service `…-0001-…`) | `[n, active]` for the element last selected | `[1, 0, 0]` selects element 1 |
+| `000a` PowerLoading (service `…-0003-…`) | Rated watts per element, LE16 | |
+| `2005` HeaterType (service `…-0003-…`) | Model string, e.g. `QRAD100E;D;` | |
 
-Also decoded from watching the radiator while pressing its buttons: clock (`0006`), boost countdown (`1027`) and default temperature (`1028`), advance (`100d`), away with its end time (`102a`), setpoint range (`1006`), backlight colour (`0001`), which menu screen is showing (`0007`), and the schedule buffer (`1002`). The full table, with each characteristic marked confirmed, inferred or unknown, and the raw capture sessions, is in [docs/ble-protocol.md](docs/ble-protocol.md). Two Cypress OTA bootloader services are also present. Leave those alone.
+The names are Dimplex's own, from ConfigR. The full map of all 61 parameters it knows, which 33 exist on the Q-Rad, the selector-write-then-read protocol, and the raw capture sessions are in [docs/ble-protocol.md](docs/ble-protocol.md). Two Cypress OTA bootloader services are also present, and three key-material characteristics that ConfigR names Btpk, EncKey and AuthKey. Leave all of those alone.
 
 [`tools/`](tools/) has the bleak scripts this was reversed with, from a Mac: dump the GATT table, print any characteristic that changes while you press buttons, and write tests that put things back afterwards. `mise tasks` lists them.
 
@@ -103,6 +107,7 @@ Also decoded from watching the radiator while pressing its buttons: clock (`0006
 - [bobthecooldad/Dimplex-Quantum-Storage-Heater-Dump](https://github.com/bobthecooldad/Dimplex-Quantum-Storage-Heater-Dump) published PCB photos of a Quantum UI board, which is how the Cypress PSoC BLE module was identified.
 - [KRoperUK/dimplex-controller-py](https://github.com/KRoperUK/dimplex-controller-py) documents the Dimplex cloud API, which is what made the hub ecosystem understandable enough to rule out.
 - Glen Dimplex's own spec sheets and help centre, listed in [docs/research.md](docs/research.md), for the 868 MHz, 6LoWPAN and AES-128 facts.
+- Dimplex's ConfigR app, decompiled for interoperability, for the parameter names and the selector read protocol. The app itself is not in this repo.
 
 ## Status
 

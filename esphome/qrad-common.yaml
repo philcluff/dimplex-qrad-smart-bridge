@@ -62,6 +62,12 @@ globals:
   - id: setpoint_raw
     type: int
     initial_value: "0"
+  - id: element1_on
+    type: bool
+    initial_value: "false"
+  - id: element1_watts
+    type: int
+    initial_value: "0"
 
 esp32_ble:
   io_capability: keyboard_only
@@ -104,9 +110,11 @@ ble_client:
           id(ble_connected) = false;
           id(mode_raw) = 0;
           id(setpoint_raw) = 0;
+          id(element1_on) = false;
           ESP_LOGW("qrad", "Disconnected from radiator");
       - component.update: mode_text
       - component.update: target_temperature
+      - component.update: power
     on_passkey_request:
       - lambda: |-
           ESP_LOGW("qrad", "PASSKEY REQUESTED: read the 6 digits on the radiator and enter them in the Pairing Passkey entity now");
@@ -145,6 +153,73 @@ sensor:
       id(mode_text).update();
       return (float) x[0];
 
+  # 0008 returns [sensor, whole, tenths] for whichever sensor was last selected by
+  # writing [n,0,0] to it. 1 = room, 2 = LCD, 3 = core. Selected by the interval below.
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: qrad
+    id: room_temperature
+    name: "Room Temperature"
+    service_uuid: "00000000-0001-1000-8000-00805f9b34fb"
+    characteristic_uuid: "00000008-0000-1000-8000-00805f9b34fb"
+    update_interval: never
+    notify: false
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (x.size() < 3 || x[0] != 1) return NAN;
+      return x[1] + x[2] / 10.0f;
+
+  # 0002 returns [element, active] after writing [element,0,0]. Q-Rad E has one element in use.
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: qrad
+    id: element1_state
+    internal: true
+    service_uuid: "00000000-0001-1000-8000-00805f9b34fb"
+    characteristic_uuid: "00000002-0000-1000-8000-00805f9b34fb"
+    update_interval: never
+    notify: false
+    lambda: |-
+      if (x.size() < 2 || x[0] != 1) return NAN;
+      id(element1_on) = x[1] != 0;
+      id(heating).publish_state(id(element1_on));
+      id(power).update();
+      return (float) x[1];
+
+  # 000a is [element1 W, element2 W] as LE16, the rated loading. Read hourly, used for the Power sensor.
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: qrad
+    id: power_loading
+    name: "Rated Power"
+    entity_category: diagnostic
+    service_uuid: "00000000-0003-1000-8000-00805f9b34fb"
+    characteristic_uuid: "0000000a-0000-1000-8000-00805f9b34fb"
+    update_interval: 1h
+    notify: false
+    unit_of_measurement: "W"
+    device_class: power
+    accuracy_decimals: 0
+    lambda: |-
+      if (x.size() < 2) return NAN;
+      id(element1_watts) = x[0] | (x[1] << 8);
+      return (float) id(element1_watts);
+
+  - platform: template
+    name: "Power"
+    id: power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+    lambda: |-
+      if (!id(ble_connected) || id(element1_watts) == 0) return NAN;
+      return id(element1_on) ? (float) id(element1_watts) : 0.0f;
+
   - platform: ble_client
     type: rssi
     ble_client_id: qrad
@@ -182,6 +257,14 @@ text_sensor:
     entity_category: diagnostic
 
 binary_sensor:
+  - platform: template
+    name: "Heating"
+    id: heating
+    device_class: heat
+    lambda: |-
+      if (!id(ble_connected)) return {};
+      return id(element1_on);
+
   - platform: template
     name: "Radiator Connected"
     device_class: connectivity
@@ -317,6 +400,28 @@ light:
     internal: true
 
 interval:
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            lambda: return id(ble_connected);
+          then:
+            - ble_client.ble_write:
+                id: qrad
+                service_uuid: "00000000-0001-1000-8000-00805f9b34fb"
+                characteristic_uuid: "00000008-0000-1000-8000-00805f9b34fb"
+                value: [1, 0, 0]
+            - delay: 300ms
+            - component.update: room_temperature
+            - delay: 500ms
+            - ble_client.ble_write:
+                id: qrad
+                service_uuid: "00000000-0001-1000-8000-00805f9b34fb"
+                characteristic_uuid: "00000002-0000-1000-8000-00805f9b34fb"
+                value: [1, 0, 0]
+            - delay: 300ms
+            - component.update: element1_state
+
   - interval: 2s
     then:
       - if:
