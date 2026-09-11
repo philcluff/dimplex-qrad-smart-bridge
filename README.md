@@ -4,7 +4,7 @@ Dimplex sell the Q-Rad as a smart radiator. What that means in practice is a £4
 
 It turns out the radiator has a Bluetooth radio on its control board already, the spec sheet calls it "Bluetooth for software updates", and it will happily take a setpoint from anything that pairs with it. So each of mine now has a £6 ESP32 sitting nearby running [ESPHome](https://esphome.io/), and Home Assistant sets the temperature directly. Nothing from Dimplex's smart range was bought.
 
-![Home Assistant device page for the office radiator: Target Temperature slider, Force Manual button, Mode Eco, Setpoint 15 °C, Model QRAD100E;D;, Radiator Connected, RSSI -80 dBm](ha-screenshot.png)
+<img src="ha-device.png" width="720" alt="Home Assistant device page for the office radiator: a Target Temperature slider and Force Manual button under Controls; Heating, Mode Eco, Power 0 W, Room Temperature 24.1 °C and Setpoint 18 °C under Sensors; a Pairing Passkey field under Configuration; and an activity feed showing the target changing to 18">
 
 Everything on that page is read back from the radiator, so if someone turns it up on the buttons, Home Assistant knows within thirty seconds.
 
@@ -49,7 +49,10 @@ What the node does:
 - Exposes **Target Temperature**, 7 to 30 °C in whole degrees. It's non-optimistic: the value is what the radiator reports, polled every 30 s and re-read a second after every write, and it goes unavailable when the radiator is off.
 - Exposes **Room Temperature** and **Heating** (element on or off) every 30 s, and **Power** derived from the element state and the radiator's rated watts.
 - Exposes **Mode**, **Setpoint (radiator)**, **Radiator Connected**, **Radiator RSSI**, **Rated Power** and **Model**, plus **Force Manual**, **Clear BLE Bonds** and **Restart** buttons.
-- Serves a web page at `http://<name>.local/` so a radiator can be paired and driven without Home Assistant.
+- Serves a web page at `http://<name>.local/` so a radiator can be paired and driven without Home Assistant:
+
+<img src="esphome-web.png" width="720" alt="The node's own ESPHome web page: Force Manual, Heating, Mode, Power, Room Temperature, Setpoint and a Target Temperature slider; a Pairing Passkey field; diagnostics including Radiator RSSI -81 dBm and Rated Power 1000 W; and a debug log showing RSSI reads and a setpoint write">
+
 - Uses the onboard LED as the only status indicator:
 
 | LED | Meaning |
@@ -57,7 +60,9 @@ What the node does:
 | Green | Talking to the radiator over an encrypted link |
 | Amber | Not connected: searching, radiator off, or waiting for a passkey |
 
-On placement: better than -75 dBm RSSI is solid, -75 to -85 works with the odd retry, worse than -85 will drop. Three metres away in the same room measured -71 to -79. The radiator's antenna is behind the plastic control panel, so favour that end over the steel back.
+On placement: better than -75 dBm RSSI is solid, -75 to -85 works with the odd retry, worse than -85 will drop. Three metres away in the same room measured -71 to -79. The radiator's antenna is behind the plastic control panel, so favour that end over the steel back. The Diagnostic section in Home Assistant is where to watch it:
+
+<img src="ha-diagnostic.png" width="340" alt="Home Assistant Diagnostic card: Clear BLE Bonds, Model QRAD100E;D;, Radiator Connected, Radiator RSSI -76 dBm, Rated Power 1,000 W, Restart, WiFi Signal -54 dBm">
 
 ## Home Assistant
 
