@@ -47,10 +47,19 @@ adoption, e.g. `number.office_radiator_target_temperature`.
    connect, hold BOOT while plugging in and try again.
 4. Watch the log for `Unconfigured Dimplex advert: AL9502<Dimplex> mac=XX:XX:XX:XX:XX:XX`.
    Put that MAC in the yaml and run again (OTA from now on, `--device <name>.local`).
-5. The node connects and the radiator displays a passkey. Enter those digits
-   in the Pairing Passkey box within about 30 s, either in Home Assistant or on
-   the node's own page at `http://<name>.local/`. If the code changes before
-   you submit, use the new one; the node retries every ~30 s.
+5. The node connects and the radiator displays a passkey. On the two radiators
+   done so far the code was the same every time for a given radiator, so it can
+   be typed at leisure once known. Submit it within about 30 s of the node
+   asking, either in Home Assistant, on the node's page at
+   `http://<name>.local/`, or straight to the API, which is the most reliable:
+
+   ```
+   curl -X POST -d '' 'http://<name>.local/text/Pairing%20Passkey/set?value=123456'
+   ```
+
+   If the 30 s window is missed the node drops the link after 45 s of failed
+   reads and asks again. Look for `PASSKEY REQUESTED` in the log, and don't
+   submit while the node is rebooting; wait for the page to reconnect.
 6. LED goes green, Model reads the radiator's model string, setpoint populates.
 
 The bond is stored in the node's NVS and on the radiator, so re-pairing is only
@@ -87,6 +96,11 @@ POST needs a body, even an empty one, or the server returns 411.
   showing as red is the tell.
 - A non-optimistic template number with no value shows "NaN" on the ESPHome
   web page. Home Assistant shows it as unavailable, which is the intent.
+- Living room bring-up (2026-09-14): two passkey attempts were lost to timing,
+  one typed after the radiator's 30 s window had closed, one typed while the
+  node was rebooting. The web page itself submits fine on Enter (verified in
+  the log). Before the retry watchdog existed, a missed window left the node
+  connected but unencrypted with no second chance; the watchdog came from this.
 
 ## Not done
 

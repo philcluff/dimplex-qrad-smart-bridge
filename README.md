@@ -116,4 +116,4 @@ The names are Dimplex's own, from ConfigR. The full map of all 61 parameters it 
 
 ## Status
 
-The office radiator is live in Home Assistant. Boards are on order for the other three. Open items in [docs/backlog.md](docs/backlog.md).
+Office (QRAD100E) and living room (QRAD200E) are live. Two radiators to go. Open items in [docs/backlog.md](docs/backlog.md).

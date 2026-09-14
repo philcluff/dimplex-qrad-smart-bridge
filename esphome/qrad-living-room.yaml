@@ -3,7 +3,7 @@
 substitutions:
   name: qrad-living-room
   friendly_name: "Living Room Radiator"
-  radiator_mac: "00:00:00:00:00:00"
+  radiator_mac: "00:A0:50:C4:53:55"
   # led_pin: GPIO48   # uncomment for an ESP32-S3 Super Mini instead of the Waveshare S3-Zero
 
 packages:

@@ -68,6 +68,9 @@ globals:
   - id: element1_watts
     type: int
     initial_value: "0"
+  - id: unencrypted_ticks
+    type: int
+    initial_value: "0"
 
 esp32_ble:
   io_capability: keyboard_only
@@ -360,9 +363,7 @@ text:
             - ble_client.passkey_reply:
                 id: qrad
                 passkey: !lambda return (uint32_t) atoi(x.c_str());
-            - text.set:
-                id: pairing_passkey
-                value: ""
+            - lambda: id(pairing_passkey).publish_state("");
 
 button:
   - platform: template
@@ -439,6 +440,20 @@ interval:
             lambda: return id(ble_connected) && id(mode_raw) == 0;
           then:
             - component.update: mode_sensor
+      # Connected but nothing readable means pairing failed or was missed.
+      # Drop the link after ~45 s so auto_connect starts a fresh pairing attempt.
+      - lambda: |-
+          if (id(ble_connected) && id(setpoint_raw) == 0) id(unencrypted_ticks)++;
+          else id(unencrypted_ticks) = 0;
+      - if:
+          condition:
+            lambda: return id(unencrypted_ticks) >= 22;
+          then:
+            - logger.log:
+                level: WARN
+                format: "No encrypted reads for 45 s, dropping the link to retry pairing"
+            - lambda: id(unencrypted_ticks) = 0;
+            - ble_client.disconnect: qrad
       - lambda: |-
           auto call = id(status_led).turn_on();
           call.set_brightness(0.50);

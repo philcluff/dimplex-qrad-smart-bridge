@@ -46,6 +46,7 @@ There are no tests.
 - **Passkey entry is a text entity that clears itself.** Six digits, validated, replied via `ble_client.passkey_reply`, then blanked. Don't store it.
 - **Refreshes come from the main loop.** The mode read publishes the Mode text directly, and the 2 s interval requests a mode read whenever connected with no mode known. Don't chain delayed actions off BLE triggers.
 - **Selector reads stay sequenced.** Room temperature (`0x0008`), element state (`0x0002`) and firmware version (`0x2001`) return whatever was last selected by a `[n,0,0]` write. Their sensors are `update_interval: never` and are only updated from the 30 s interval right after the matching write. Don't give them their own poll.
+- **Failed pairing must retry.** After connect, if no encrypted read succeeds for 45 s the 2 s interval disconnects so `auto_connect` starts a fresh pairing request. Without it a missed passkey leaves the node connected-but-useless forever. Keep the watchdog.
 - **Never write to** the two Cypress bootloader services (`00060000-f8ce-...`) or the property-less characteristics `2006`-`2008` and `200f`. `docs/ble-protocol.md` lists what is safe.
 - **LED semantics are fixed:** green connected, amber not. Channel order on the S3-Zero is RGB, brightness 0.5, pin from the `led_pin` substitution. Documented in both READMEs; change both or neither.
 - **One node, one radiator.** BLE through walls is poor and the radiator accepts one central. Don't try to multiplex.

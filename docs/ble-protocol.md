@@ -29,8 +29,11 @@ decoding is from the capture sessions at the bottom of this file.
 - Sunhouse writes the clock characteristic every 3 s as a keep-alive. The ESPHome
   node, polling every 10 s, has held its connection for hours with no keep-alive.
   A truly idle connection is untested.
-- Advertised name prefix `AL9502` is from the office unit; check whether it
-  differs per radiator when the others are dumped.
+- Advertised name prefix is per unit. Living room `AL5355` matches its MAC
+  ending 53:55; office `AL9502` does not match its MAC ending 95:A2, so the
+  derivation isn't simply the MAC. Two data points, no rule yet.
+- Passkey appears fixed per radiator rather than rolling: the living room unit
+  showed the same six digits on every pairing attempt (2026-09-14).
 
 ## Services
 
