@@ -32,6 +32,10 @@ below is out of scope until asked for.
 - **Keep-alive need.** Sunhouse writes the clock every 3 s to hold the
   connection. The ESPHome node polls every 10 s and has held a connection for
   hours; a truly idle link is untested. Only matters if polling is ever reduced.
+- **Desired versus reported setpoint.** Target Temperature reads Unknown in HA
+  while the radiator is off at its plug. Options: hold the desired value on the
+  node and write it on reconnect, or hide the row with a conditional card.
+  Undecided as of 2026-09-14.
 - **Climate entity.** Currently a number entity; a `generic_thermostat` in HA
   using the room sensor gives a thermostat card. Could also be done on the node
   now that it reads the radiator's own room temperature.

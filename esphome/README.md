@@ -1,7 +1,7 @@
 # ESPHome nodes
 
 > [!NOTE]
-> This file was written by Claude during the build, from the bring-up of the first node on the bench and the logs it produced. The steps were followed once, on one radiator; expect to adjust them for the next.
+> This file was written by Claude during the build, from the bring-up of the first two nodes and the logs they produced. The steps have been followed twice; expect to adjust them for the next.
 
 One Waveshare ESP32-S3-Zero per radiator. `qrad-common.yaml` is the shared
 package; each radiator gets a small file with three substitutions (`name`,
@@ -30,6 +30,9 @@ adoption, e.g. `number.office_radiator_target_temperature`.
 - **Pairing Passkey** (text, config) - enter the six digits shown on the
   radiator, once. Clears itself after submitting. Inert when already bonded.
 - **Force Manual**, **Clear BLE Bonds**, **Restart** (buttons).
+- Power: about 100 to 150 mA average with Wi-Fi and BLE held, sub-millisecond
+  peaks near 400 mA. Any 1 A USB supply is fine; IKEA's 1 A PSU-and-cable
+  bundles are in use.
 - Onboard LED at 50%: green connected, amber not connected (searching,
   radiator off, or waiting for a passkey). Does not reflect Wi-Fi. Channel
   order on the S3-Zero's WS2812 is RGB, pin GPIO21; Super Mini clones use GPIO48

@@ -13,3 +13,6 @@ esphome/.esphome/
 .DS_Store
 *.apk
 *.xapk
+
+# Local agent context, never published
+CLAUDE.local.md

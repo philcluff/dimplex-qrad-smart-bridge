@@ -16,7 +16,7 @@ This was worked out on a QRAD100E Series D, standing on [JYewman's work](https:/
 |---|---|
 | Dimplex Q-Rad E, Series D | Any QRADxxxE with a **Comms** entry under Settings. The RF variants (QRADxxxRF) are untested |
 | [Waveshare ESP32-S3-Zero](https://www.waveshare.com/wiki/ESP32-S3-Zero) | One per radiator. ESP32-S3FH4R2, 4 MB flash, 2 MB PSRAM, USB-C, onboard WS2812. Any ESP32-S3 will do, but the cheap Super Mini clones have a notoriously bad antenna and this device is nothing but radio |
-| USB-C power supply | Anything 1 A. Idle draw is well under 100 mA |
+| USB-C power supply | Anything 1 A. About 100 to 150 mA average, brief 400 mA peaks. IKEA's 1 A bundles work |
 
 There is no wiring. The board talks to the radiator over the air and the only pin in use is the onboard LED. Put it anywhere in the same room; the node reports link RSSI so you can check the spot.
 
